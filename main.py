@@ -53,7 +53,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     access_token = create_access_token(
         data={"sub": user["username"]}, role=user["role"], expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "role":user["role"],  "token_type": "bearer"}
 
 # # Secured endpoint to retrieve user information
 @app.get("/users/me/")
@@ -66,32 +66,10 @@ async def read_users_me(token: str = Depends(oauth2_scheme)):
 async def get_case(num: int = 0):
     return source.test_ids[num][-3:]
 
-# Endpoint to show predictions by ID
-# @app.get("/showPredictsByID/")
-# async def show_predicts_by_id(numcase: int, start_slice: int = 60, token: str = Depends(oauth2_scheme)):
-#     try:
-#         decode_token(token)
-#         case = get_case(numcase)
-#         unet_model.showPredictsById(case, start_slice)
-#         return {"message": f"Predictions displayed for case: {case}"}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-
 #Endpoint to get samples_list
 @app.get("/samples_list")
 async def get_samples_list():
     return source.test_ids
-
-# # Endpoint to show predicted segmented images
-# @app.post("/showPredictSegmented/")
-# async def show_predicted_segmentations_api(samples_list: list, slice_to_plot: int, token: str = Depends(oauth2_scheme)):
-#     try:
-#         decode_token(token)
-#         samples_list = get_samples_list()
-#         unet_model.show_predicted_segmentations(samples_list, slice_to_plot, cmap='gray', norm=None)
-#         return {"message": "Predicted segmentations displayed"}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
 
 
 # Endpoint to evaluate the model on test data
@@ -111,17 +89,6 @@ async def evaluate_model_api(token: str = Depends(oauth2_scheme)):
         return metrics_dict
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# Endpoint to predict brain segmentation from image file path
-# @app.post("/predict/")
-# async def predict(case_path: str, case: str, token: str = Depends(oauth2_scheme)):
-#     try:
-#         username = decode_token(token)
-#         prediction = unet_model.predictByPath(case_path, case)  # Call method using the instance
-#         return {"prediction": prediction.tolist()}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint to show drift (placeholder)
 @app.get("/showdrift/")

@@ -23,6 +23,10 @@ st.set_page_config(page_title="Medical Image Segmentation", layout="wide")
 # Initialize session state for authentication and login status
 if 'access_token' not in st.session_state:
     st.session_state.access_token = None
+    
+if 'role' not in st.session_state:
+    st.session_state.role = None
+
 
 if 'is_logged_in' not in st.session_state:
     st.session_state.is_logged_in = False
@@ -41,16 +45,25 @@ if "flair_data" not in st.session_state:
 if "t1ce_data" not in st.session_state:
     st.session_state.t1ce_data = None
     st.session_state.t1ce_path = None
+    
+if "model_metrics" not in st.session_state:
+    st.session_state.model_metrics = None
+
+if "data_drift" not in st.session_state:
+    st.session_state.data_drift = None
 
 # Authentication function
 def login(username, password):
     try:
         response = requests.post(f"{BASE_URL}/token", data={"username": username, "password": password})
-        if response.status_code == 200:
+        if response.status_code == 200:                
             st.session_state.access_token = response.json().get('access_token')
+            st.session_state.role = response.json().get('role')
             st.session_state.username = username
             st.session_state.is_logged_in = True
             st.success(f"Welcome, {username}!")
+            st.rerun()
+            
         else:
             st.error("Invalid username or password")
     except Exception as e:
@@ -60,6 +73,7 @@ def login(username, password):
 def logout():
     st.session_state.access_token = None
     st.session_state.is_logged_in = False
+    st.session_state.role = None
     st.success("Logged out successfully!")
 
 # Check if user is authenticated
@@ -71,7 +85,9 @@ def show_drift():
     headers = {"Authorization": f"Bearer {st.session_state.access_token}"}
     response = requests.get(f"{BASE_URL}/showdrift/", headers=headers)
     if response.status_code == 200:
-       st.components.v1.html(response.text, height=1000, scrolling=True)
+        st.session_state.data_drift = response.text
+        st.components.v1.html(response.text, height=1000, scrolling=True)
+        
     else:
         st.error("Error in fetching drift status.")
 
@@ -146,6 +162,14 @@ def show_predicted_segmentations(p, slice_to_plot=60, cmap='gray', norm=None):
     st.pyplot(fig_seg)
     return save_plot_as_image(fig_seg, f"segmentation_{slice_to_plot}.png")
 
+def get_right_page():
+    page = None
+    if st.session_state.role == "admin":
+        page = st.sidebar.radio("Go to", ["Welcome", "Segmentation Prediction", "Model Evaluation", "Drift Detection", "Logout"])
+    elif st.session_state.role == "user":
+        page = st.sidebar.radio("Go to", ["Welcome", "Segmentation Prediction", "Logout"])
+    return page
+
 # ---- MAIN APP LOGIC ----
 
 # Only show login page if the user isn't authenticated yet
@@ -163,16 +187,39 @@ if not is_authenticated() and not st.session_state.is_logged_in:
 if is_authenticated() and st.session_state.is_logged_in:
     # Sidebar for navigation
     st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Go to", ["Welcome", "Segmentation Prediction", "Model Evaluation", "Drift Detection", "Logout"])
+    page = get_right_page()
+    # if st.session_state.role == "admin":
+    #     page = st.sidebar.radio("Go to", ["Welcome", "Segmentation Prediction", "Model Evaluation", "Drift Detection", "Logout"])
+    # elif st.session_state.role == "user":
+    #     page = st.sidebar.radio("Go to", ["Welcome", "Segmentation Prediction", "Logout"])
 
     # Welcome Page
     if page == "Welcome":
         st.title(f"Welcome, {st.session_state.username}!")
-        st.subheader("Available Operations")
-        st.write("- **Segmentation Prediction**: Upload a medical image and predict segmentation.")
-        st.write("- **Model Evaluation**: Evaluate the model on the test dataset.")
-        st.write("- **Drift Detection**: Check for any data drift.")
-        st.write("- **Logout**: End your session.")
+        if st.session_state.role == "admin":
+            st.subheader("Available Operations")
+            st.write("- **Segmentation Prediction**: Upload a medical image and predict segmentation.")
+            st.write("- **Model Evaluation**: Evaluate the model on the test dataset.")
+            st.write("- **Drift Detection**: Check for any data drift.")
+            st.write("- **Logout**: End your session.")
+        elif st.session_state.role == "user":
+            st.subheader("Available Operations")
+            st.write("- **Segmentation Prediction**: Upload a medical image and predict segmentation.")
+            st.write("- **Logout**: End your session.")
+
+    # if page == "Welcome" and st.session_state.role == "admin":
+    #     st.title(f"Welcome, {st.session_state.username}!")
+    #     st.subheader("Available Operations")
+    #     st.write("- **Segmentation Prediction**: Upload a medical image and predict segmentation.")
+    #     st.write("- **Model Evaluation**: Evaluate the model on the test dataset.")
+    #     st.write("- **Drift Detection**: Check for any data drift.")
+    #     st.write("- **Logout**: End your session.")
+    
+    # if page == "Welcome" and st.session_state.role == "user":
+    #     st.title(f"Welcome, {st.session_state.username}!")
+    #     st.subheader("Available Operations")
+    #     st.write("- **Segmentation Prediction**: Upload a medical image and predict segmentation.")
+    #     st.write("- **Logout**: End your session.")
 
     # Segmentation Prediction Page
     if page == "Segmentation Prediction":
@@ -286,7 +333,6 @@ if is_authenticated() and st.session_state.is_logged_in:
         if st.button("Evaluate Model"):
             response = authenticated_request("/evaluate/", method="POST")
             if response.status_code == 200:
-                st.subheader("Model Evaluation Metrics")
                 # Assuming response.text contains your JSON-like string
                 response_json = response.json()  # Convert JSON string to a dictionary
 
@@ -294,9 +340,14 @@ if is_authenticated() and st.session_state.is_logged_in:
                 df = pd.DataFrame(list(response_json.items()), columns=["Metric", "Value"],index=None)
 
                 # Display the DataFrame as a table
-                st.table(df.style.hide(axis='index'))
+                st.session_state.model_metrics = df
+                # st.table(df.style.hide(axis='index'))
             else:
                 st.error("Failed to evaluate model")
+                
+        if st.session_state.model_metrics is not None:
+            st.subheader("Model Evaluation Metrics")
+            st.table(st.session_state.model_metrics.style.hide(axis='index'))
 
     # Drift Detection Page
     if page == "Drift Detection":
@@ -305,7 +356,10 @@ if is_authenticated() and st.session_state.is_logged_in:
 
         if st.button("Check for Drift"):
             show_drift()
+            
+        if st.session_state.data_drift is not None:
+            st.components.v1.html(st.session_state.data_drift, height=1000, scrolling=True)
 
-    # Logout page
+    # Logout page   
     if page == "Logout":
         logout()
