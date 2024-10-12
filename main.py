@@ -1,11 +1,12 @@
 import os
 from typing import List
 import streamlit as st
+import numpy as np
 
 from elt_report import generate_drift_report
 
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 from pydantic import BaseModel
@@ -175,39 +176,33 @@ async def predict(flair: UploadFile = File(...), t1ce: UploadFile = File(...)):
         # If any error occurs, raise an HTTP exception with the error details
         raise HTTPException(status_code=500, detail=str(e))
     
-    
+   
 @app.post("/showPredictSegmented/")
-async def show_predicted_segmentations_api(files: List[UploadFile] = File(...)):
+async def show_predicted_segmentations_api(flair: UploadFile = File(...), t1ce: UploadFile = File(...)):
     try:
-        # Check if exactly two files are uploaded
-        if len(files) != 2:
-            raise HTTPException(status_code=400, detail="Please upload exactly two files.")
+        flair_file_path = f"{flair.filename}"
+        t1ce_file_path = f"{t1ce.filename}"
 
-        # Initialize variables to store file paths for flair and t1ce images
-        flair_file_path = None
-        t1ce_file_path = None
+        # Save files
+        with open(flair_file_path, "wb") as f:
+            f.write(await flair.read())
 
-        # Iterate over the uploaded files and verify their filenames
-        for file in files:
-            if file.filename.endswith("_flair.nii"):
-                flair_file_path = f"{file.filename}"
-                with open(flair_file_path, "wb") as f:
-                    content = await file.read()
-                    f.write(content)
-            elif file.filename.endswith("_t1ce.nii"):
-                t1ce_file_path = f"{file.filename}"
-                with open(t1ce_file_path, "wb") as f:
-                    content = await file.read()
-                    f.write(content)
-            else:
-                raise HTTPException(status_code=400, detail="File names must end with '_flair.nii' and '_t1ce.nii'.")
+        with open(t1ce_file_path, "wb") as f:
+            f.write(await t1ce.read())
 
         # Ensure both flair and t1ce files were uploaded
         if not flair_file_path or not t1ce_file_path:
             raise HTTPException(status_code=400, detail="Both _flair.nii and _t1ce.nii files must be provided.")
-
+        
         # Call the prediction method with the paths to both files
-        unet_model.show_predicted_segmentations(flair_file_path, t1ce_file_path, 60)
+        prediction = unet_model.predict_segmentation(flair_file_path, t1ce_file_path)
+
+        prediction_list = np.array(prediction).tolist()
+
+        # return JSONResponse(content={"prediction": prediction_list})
+        return {"prediction": prediction_list}
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))   
+    
     
