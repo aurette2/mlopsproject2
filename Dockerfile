@@ -10,13 +10,14 @@ COPY . .
 # Install necessary system dependencies, including libGL for OpenCV
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
-    libglib2.0-0
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
     
 # Install the required Python packages
 RUN pip install --upgrade -r requirements.txt
 
 # Pull the DVC dataset
-RUN dvc pull
+# RUN dvc pull
 
 # Expose the ports for FastAPI (8000) and Streamlit (8501)
 EXPOSE 8000
