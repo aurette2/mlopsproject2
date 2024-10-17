@@ -4,9 +4,9 @@ name: CI/CD Pipeline
 
 # Trigger the workflow on push and pull request events
 on:
-#   push:
-#     branches:
-#       - main
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
